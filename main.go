@@ -71,6 +71,7 @@ func (c *ChessHub) RunWorkerUserJoined() {
 			if count.Load() == 2 {
 				c.Rooms[roomID].Game = chess.NewGame(chess.UseNotation(chess.LongAlgebraicNotation{}))
 				c.NotifyUsers(roomID)
+				delete(c.CountUserJoined, roomID)
 				return
 			}
 		}
@@ -148,6 +149,7 @@ func (c *ChessHub) NotifyUserForPickedRoom(roomID, userID string, color bool) {
 func (c *ChessHub) WaitForRoom(userID string) {
 	if ch, ok := c.ChanWaitingRoom[userID]; ok {
 		<-ch
+		delete(c.ChanWaitingRoom, userID)
 	}
 }
 
@@ -187,6 +189,10 @@ func (c *ChessHub) StartGame(userID string) error {
 		if err := game.MoveStr(string(message)); err != nil {
 			players[color].ActiveConn.WriteMessage(websocket.TextMessage, []byte(err.Error()))
 			continue
+		}
+
+		if players[oppositeColor].ActiveConn == nil {
+			break
 		}
 
 		players[oppositeColor].ActiveConn.WriteMessage(websocket.TextMessage, message)
@@ -256,6 +262,12 @@ func (s *Server) JoinRoom(w http.ResponseWriter, r *http.Request) {
 
 	conn, _ := upgrader.Upgrade(w, r, nil)
 	defer conn.Close()
+	defer func() {
+		client := s.ChessHub.Clients[clientID]
+		client.ActiveConn = nil
+		delete(s.ChessHub.Clients, clientID)
+		delete(s.ChessHub.Rooms, client.RoomID)
+	}()
 
 	s.ChessHub.UserJoined(clientID, conn)
 	s.ChessHub.WaitForOthers(clientID)
@@ -268,6 +280,7 @@ func main() {
 		server   = NewServer(chessHub)
 		router   = mux.NewRouter()
 	)
+
 	go chessHub.RunWorkerNewUser()
 	go chessHub.RunWorkerUserJoined()
 
