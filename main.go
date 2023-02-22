@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/notnil/chess"
 )
 
 const (
@@ -69,6 +69,7 @@ func (c *ChessHub) RunWorkerUserJoined() {
 			count := c.CountUserJoined[roomID]
 			count.Add(1)
 			if count.Load() == 2 {
+				c.Rooms[roomID].Game = chess.NewGame(chess.UseNotation(chess.LongAlgebraicNotation{}))
 				c.NotifyUsers(roomID)
 				return
 			}
@@ -150,15 +151,66 @@ func (c *ChessHub) WaitForRoom(userID string) {
 	}
 }
 
-func (c *ChessHub) UserWaitForOthers(userID string) {
+func (c *ChessHub) WaitForOthers(userID string) {
 	if client, ok := c.Clients[userID]; ok {
 		<-client.ChanNotifyWhenReady
 	}
 }
 
+func (c *ChessHub) StartGame(userID string) error {
+	var (
+		client     = c.Clients[userID]
+		roomID     = client.RoomID
+		movesOrder = []string{ColorWhite, ColorBlack}
+		game       = c.Rooms[roomID].Game
+		index      = 0
+	)
+
+	players, err := c.GetPlayers(roomID)
+	if err != nil {
+		return err
+	}
+
+	client.ActiveConn.WriteMessage(websocket.TextMessage, []byte(client.Color))
+
+	for game.Outcome() == chess.NoOutcome {
+		var (
+			color         = movesOrder[index%2]
+			oppositeColor = movesOrder[(index+1)%2]
+		)
+
+		mt, message, err := players[color].ActiveConn.ReadMessage()
+		if err != nil || mt == websocket.CloseMessage {
+			break
+		}
+
+		if err := game.MoveStr(string(message)); err != nil {
+			players[color].ActiveConn.WriteMessage(websocket.TextMessage, []byte(err.Error()))
+			continue
+		}
+
+		players[oppositeColor].ActiveConn.WriteMessage(websocket.TextMessage, message)
+		index++
+	}
+
+	client.ActiveConn.WriteMessage(websocket.TextMessage, []byte(game.Outcome()))
+	client.ActiveConn.WriteMessage(websocket.TextMessage, []byte(game.Method().String()))
+
+	return nil
+}
+
+func (c *ChessHub) GetPlayers(roomID string) (map[string]*ChessClient, error) {
+	players := make(map[string]*ChessClient)
+	for _, v := range c.Rooms[roomID].Clients {
+		players[v.Color] = v
+	}
+	return players, nil
+}
+
 type ChessRoom struct {
 	ID      string
 	Clients map[string]*ChessClient
+	Game    *chess.Game
 }
 
 type ChessClient struct {
@@ -205,9 +257,9 @@ func (s *Server) JoinRoom(w http.ResponseWriter, r *http.Request) {
 	conn, _ := upgrader.Upgrade(w, r, nil)
 	defer conn.Close()
 
-	fmt.Printf("%s %#v\n", clientID, s.ChessHub.Clients[clientID])
 	s.ChessHub.UserJoined(clientID, conn)
-	s.ChessHub.UserWaitForOthers(clientID)
+	s.ChessHub.WaitForOthers(clientID)
+	s.ChessHub.StartGame(clientID)
 }
 
 func main() {
