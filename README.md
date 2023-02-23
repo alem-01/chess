@@ -1,9 +1,9 @@
-# ♟️ chess web-socket server
+# ♟️ chess websocket server
 
-This project represents a simple web-socket server to play chess.
+This project represents a simple websocket server to play chess.
 
 - [Local setup](#local-setup)
-- [Interacting with web-socket server to play chess](#interacting-with-web-socket-server-to-play-chess)
+- [Interacting with websocket server to play chess](#interacting-with-websocket-server-to-play-chess)
 - [Chess moves](#chess-moves)
 - [Features](#features)
 - [Limitations](#limitations)
@@ -59,7 +59,7 @@ Run the project with `PORT` env set:
 docker run -d -e PORT=8080 -p 8080:8080 chess
 ```
 
-## Interacting with web-socket server to play chess
+## Interacting with websocket server to play chess
 
 To play chess, players need to be matched with other player.
 
