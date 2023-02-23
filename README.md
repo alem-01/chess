@@ -80,6 +80,10 @@ After successful connection, the client will receive its own chess color, either
 
 From now on, players can exchange moves to play chess.
 
+> If only one user connects, then the server will not send any color information.
+> That's because the server waits for second player to join. After both players join,
+> the players will receive own colors.
+
 ## Chess moves
 
 The players exchange with text messages to indicate their chess move.
