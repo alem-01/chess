@@ -4,6 +4,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 
@@ -279,6 +280,8 @@ func main() {
 		chessHub = NewChessHub()
 		server   = NewServer(chessHub)
 		router   = mux.NewRouter()
+
+		port = getenv("PORT", "8080")
 	)
 
 	go chessHub.RunWorkerNewUser()
@@ -286,9 +289,18 @@ func main() {
 
 	router.HandleFunc("/rooms", server.PickRoom)
 	router.HandleFunc("/rooms/{client_id}", server.JoinRoom)
-
 	http.Handle("/", router)
-	if err := http.ListenAndServe(":8081", nil); err != nil {
+
+	log.Printf("running chess server on port :%s...", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Println(err)
 	}
+}
+
+func getenv(key, fallback string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	return value
 }
